@@ -1,0 +1,15 @@
+# Python 3.10+ recomendado
+numpy
+pandas
+scikit-learn>=1.1
+scipy
+librosa>=0.10
+soundfile
+matplotlib
+tqdm
+zenodo_get
+# a partir da semana 2 (CNN / ONNX):
+torch
+torchaudio
+onnx
+onnxruntime

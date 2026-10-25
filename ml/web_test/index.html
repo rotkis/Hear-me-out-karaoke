@@ -1,0 +1,151 @@
+<!DOCTYPE html>
+<html lang="pt-BR">
+<head>
+<meta charset="utf-8">
+<meta name="viewport" content="width=device-width, initial-scale=1">
+<title>Teste do classificador de voz no navegador</title>
+<style>
+  :root { --bg:#fff; --fg:#1d1d1f; --mut:#6b6b70; --card:#f4f4f6; --ok:#1a7f37; --bad:#c62828; --acc:#3b5bdb; }
+  @media (prefers-color-scheme: dark) { :root { --bg:#16161a; --fg:#ececf0; --mut:#9a9aa3; --card:#222228; --ok:#3fb950; --bad:#ff6b6b; --acc:#748ffc; } }
+  body { font:16px/1.5 system-ui,sans-serif; background:var(--bg); color:var(--fg); max-width:760px; margin:0 auto; padding:20px; }
+  h1 { font-size:1.3rem; } h2 { font-size:1.05rem; margin-top:0; }
+  section { background:var(--card); border-radius:12px; padding:16px; margin:16px 0; }
+  button { font:inherit; padding:8px 14px; border-radius:8px; border:1px solid var(--acc); background:var(--acc); color:#fff; cursor:pointer; }
+  button.sec { background:transparent; color:var(--acc); }
+  button:disabled { opacity:.5; cursor:default; }
+  table { border-collapse:collapse; width:100%; font-size:.9rem; display:block; overflow-x:auto; }
+  th,td { text-align:left; padding:4px 10px 4px 0; white-space:nowrap; }
+  .ok { color:var(--ok); font-weight:600; } .bad { color:var(--bad); font-weight:600; } .mut { color:var(--mut); font-size:.9rem; }
+  .bar { height:22px; background:var(--bg); border-radius:11px; overflow:hidden; margin:8px 0; }
+  .bar > div { height:100%; width:0; background:var(--acc); transition:width .25s; }
+  .big { font-size:1.6rem; font-weight:700; }
+  label { display:block; margin:8px 0; }
+</style>
+</head>
+<body>
+<h1>Classificador de voz (limpa vs. distorcida) no navegador</h1>
+<p class="mut" id="status">Carregando modelo…</p>
+
+<section>
+  <h2>1. Teste de paridade</h2>
+  <p class="mut">Compara o log-Mel calculado em JavaScript com o do librosa e as probabilidades do ONNX Runtime Web com as do Python.
+  Todas as linhas devem ficar "OK" antes de confiar na demo ao vivo.</p>
+  <button id="btnParity" disabled>Rodar teste</button>
+  <table id="parity" style="margin-top:12px"></table>
+</section>
+
+<section>
+  <h2>2. Microfone ao vivo</h2>
+  <p class="mut">Use fones de ouvido. Filtros do navegador (eco, ruído, ganho automático) ficam desligados.</p>
+  <button id="btnMic" disabled>Iniciar microfone</button>
+  <label>Limiar de silêncio (RMS): <input id="gate" type="range" min="0.001" max="0.05" step="0.001" value="0.01"> <span id="gateVal">0.010</span></label>
+  <div class="big" id="label">—</div>
+  <div class="bar"><div id="bar"></div></div>
+  <div class="mut" id="info"></div>
+</section>
+
+<script src="https://cdn.jsdelivr.net/npm/onnxruntime-web@1.20.1/dist/ort.min.js"></script>
+<script src="logmel.js"></script>
+<script>
+const $ = (id) => document.getElementById(id);
+let meta, vectors, session, logmel;
+
+async function init() {
+  try {
+    ort.env.wasm.wasmPaths = 'https://cdn.jsdelivr.net/npm/onnxruntime-web@1.20.1/dist/';
+    [meta, vectors] = await Promise.all([
+      fetch('model_meta.json').then(r => r.json()),
+      fetch('test_vectors.json').then(r => r.json()),
+    ]);
+    logmel = LogMel.makeLogMel({ nFft: meta.nFft, hop: meta.hop, nMels: meta.nMels, nFrames: meta.nFrames, padMode: meta.padMode, filterbank: meta.filterbank });
+    session = await ort.InferenceSession.create('model.onnx', { executionProviders: ['wasm'] });
+    $('status').textContent = `Modelo carregado (${meta.task}, classes: ${meta.classes.join(', ')}; padding da STFT: ${meta.padMode}).`;
+    $('btnParity').disabled = false; $('btnMic').disabled = false;
+  } catch (e) {
+    $('status').innerHTML = '<span class="bad">Erro ao carregar:</span> ' + e.message + '<br>Rode <code>python -m http.server 8000</code> dentro de web_test/ e abra http://localhost:8000 (não abra o arquivo direto).';
+    console.error(e);
+  }
+}
+
+async function infer(lm) {
+  const t = new ort.Tensor('float32', lm, [1, 1, meta.nMels, meta.nFrames]);
+  const res = await session.run({ logmel: t });
+  return Array.from(res.probs.data);
+}
+const maxAbs = (a, b) => { let m = 0; for (let i = 0; i < a.length; i++) m = Math.max(m, Math.abs(a[i] - b[i])); return m; };
+
+$('btnParity').onclick = async () => {
+  const rows = ['<tr><th>Janela</th><th>Erro log-Mel (JS vs librosa)</th><th>Erro probs (JS vs Python)</th><th>Probs obtidas</th><th></th></tr>'];
+  for (const v of vectors) {
+    const jsLm = logmel(Float32Array.from(v.audio));
+    const eLm = maxAbs(jsLm, v.logmel);
+    const p = await infer(jsLm);
+    const eP = maxAbs(p, v.probs);
+    const ok = eLm < 1e-3 && eP < 1e-2;
+    rows.push(`<tr><td>${v.name}</td><td>${eLm.toExponential(1)}</td><td>${eP.toExponential(1)}</td><td>${p.map(x => x.toFixed(3)).join(' / ')}</td><td class="${ok ? 'ok' : 'bad'}">${ok ? 'OK' : 'DIFERENTE'}</td></tr>`);
+  }
+  $('parity').innerHTML = rows.join('');
+};
+
+// ---------- Microfone ao vivo ----------
+const workletCode = `class Cap extends AudioWorkletProcessor {
+  process(inputs) { const ch = inputs[0][0]; if (ch) this.port.postMessage(ch.slice(0)); return true; }
+} registerProcessor('capture', Cap);`;
+
+let ctx = null, stream = null, timer = null, busy = false, smooth = 0, state = 'limpa';
+let ring, wr = 0, filled = 0;
+
+$('gate').oninput = () => { $('gateVal').textContent = (+$('gate').value).toFixed(3); };
+
+function push(block) {
+  for (let i = 0; i < block.length; i++) { ring[wr] = block[i]; wr = (wr + 1) % ring.length; }
+  filled = Math.min(ring.length, filled + block.length);
+}
+function lastWindow() {
+  const n = Math.round(meta.sr * meta.winS), out = new Float32Array(n);
+  for (let i = 0; i < n; i++) out[i] = ring[(wr - n + i + ring.length * 2) % ring.length];
+  return out;
+}
+
+async function tick() {
+  if (busy || filled < meta.sr * meta.winS) return;
+  busy = true;
+  try {
+    const { y, rms } = LogMel.normalizeWindow(lastWindow(), meta.targetRms);
+    if (rms < +$('gate').value) {
+      $('label').textContent = 'Silêncio'; $('info').textContent = `RMS ${rms.toFixed(4)} abaixo do limiar`;
+    } else {
+      const t0 = performance.now();
+      const p = await infer(logmel(y));
+      const ms = performance.now() - t0;
+      const pDist = meta.task === 'binary' ? p[1] : 1 - p[0];
+      smooth = 0.6 * smooth + 0.4 * pDist;                    // média móvel
+      if (smooth > 0.6) state = 'distorcida'; else if (smooth < 0.4) state = 'limpa'; // histerese
+      $('label').textContent = state === 'distorcida' ? 'Voz distorcida' : 'Voz limpa';
+      $('bar').style.width = (smooth * 100).toFixed(0) + '%';
+      $('info').textContent = `P(distorcida) bruta ${pDist.toFixed(2)} · suavizada ${smooth.toFixed(2)} · inferência ${ms.toFixed(0)} ms · RMS ${rms.toFixed(3)}`;
+    }
+  } finally { busy = false; }
+}
+
+$('btnMic').onclick = async () => {
+  if (ctx) { clearInterval(timer); stream.getTracks().forEach(t => t.stop()); await ctx.close(); ctx = null; $('btnMic').textContent = 'Iniciar microfone'; $('label').textContent = '—'; return; }
+  try {
+    stream = await navigator.mediaDevices.getUserMedia({ audio: { echoCancellation: false, noiseSuppression: false, autoGainControl: false, channelCount: 1 } });
+    ctx = new AudioContext({ sampleRate: meta.sr });
+    await ctx.audioWorklet.addModule(URL.createObjectURL(new Blob([workletCode], { type: 'application/javascript' })));
+    ring = new Float32Array(meta.sr * 2); wr = 0; filled = 0; smooth = 0; state = 'limpa';
+    const node = new AudioWorkletNode(ctx, 'capture');
+    node.port.onmessage = (e) => push(e.data);
+    const mute = ctx.createGain(); mute.gain.value = 0;
+    ctx.createMediaStreamSource(stream).connect(node); node.connect(mute); mute.connect(ctx.destination);
+    timer = setInterval(tick, meta.hopS * 1000);
+    $('btnMic').textContent = 'Parar microfone';
+    $('info').textContent = `Taxa de amostragem do contexto: ${ctx.sampleRate} Hz (esperado ${meta.sr}).`;
+  } catch (e) { $('info').innerHTML = '<span class="bad">Erro no microfone:</span> ' + e.message; }
+};
+
+init();
+</script>
+</body>
+</html>
