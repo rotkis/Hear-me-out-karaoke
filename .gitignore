@@ -30,3 +30,9 @@ go.work.sum
 # Editor/IDE
 # .idea/
 # .vscode/
+ml/.venv/
+ml/__pycache__/
+ml/EMVD/
+ml/outputs/X.npy
+ml/outputs/models/
+ml/*.pt
