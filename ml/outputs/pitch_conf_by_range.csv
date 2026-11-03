@@ -1,0 +1,11 @@
+condicao,faixa,median,count
+BlackShriek,High,0.01,54
+BlackShriek,Mid,0.028,58
+ClearVoice,High,0.988,99
+ClearVoice,Low,0.986,104
+ClearVoice,Mid,0.992,100
+DeathGrowl,Low,0.037,94
+DeathGrowl,Mid,0.037,88
+HardcoreScream,High,0.062,54
+HardcoreScream,Low,0.219,48
+HardcoreScream,Mid,0.065,61

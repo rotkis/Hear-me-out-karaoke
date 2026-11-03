@@ -1,0 +1,10 @@
+recording,quem,tonic,mode,reference,rating
+outputs/stems/htdemucs/LP/vocals.wav,original,D#,minor,,
+dados/covers/intheendLP.mp3,eu,D#,minor,outputs/stems/htdemucs/LP/vocals.wav,
+dados/covers/cover de linkin park.mp3.mp3,amigo,D#,minor,outputs/stems/htdemucs/LP/vocals.wav,
+outputs/stems/htdemucs/Rosa/vocals.wav,original,D#,minor,,
+dados/covers/Ireallywanttostayatyourhouse.mp3,eu,D#,minor,outputs/stems/htdemucs/Rosa/vocals.wav,
+dados/covers/Chorando em Casa.mp3,amigo,D#,minor,outputs/stems/htdemucs/Rosa/vocals.wav,
+outputs/stems/htdemucs/Hugs/vocals.wav,original,F,minor,,
+dados/covers/hugsPale.mp3,eu,F,minor,outputs/stems/htdemucs/Hugs/vocals.wav,
+dados/covers/só um abraço mesmo pra salvar isso daqui.mp3,amigo,F,minor,outputs/stems/htdemucs/Hugs/vocals.wav,

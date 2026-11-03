@@ -13,3 +13,4 @@ torch
 torchaudio
 onnx
 onnxruntime
+demucs

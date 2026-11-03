@@ -36,3 +36,9 @@ ml/EMVD/
 ml/outputs/X.npy
 ml/outputs/models/
 ml/*.pt
+
+# midia pesada / gerada (nao versionar)
+ml/dados/
+ml/outputs/stems/
+ml/*.mp3
+ml/*.wav
